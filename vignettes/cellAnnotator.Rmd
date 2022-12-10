@@ -1,0 +1,164 @@
+---
+title: "cellAnnotator Vignette"
+author: "Junhui Li"
+date: "`r doc_date()`"
+package: "`r pkg_ver('cellAnnotator')`"
+bibliography: bibliography.bib
+abstract: >
+  annotate cell type with known cell type single cell RNA sequence dataset using support vector machine method.
+vignette: >
+  %\VignetteIndexEntry{cellAnnotator Vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+output:
+  BiocStyle::html_document
+---
+  
+```{r echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+suppressPackageStartupMessages({
+  library(cellAnnotator)
+})
+```
+
+# Introduction
+
+## Step 1: read train and query dataset and library R package
+
+```{r fetchSequences1}
+
+library(cellAnnotator)
+
+## load reference meta and expression dataset
+data("reference_meta")
+data("reference_expr")
+
+## load reference meta and expression dataset
+data("query_meta")
+data("query_expr")
+
+## find common genes between reference and query expression dataset
+## then extract expression dataset with common genes for next steps
+```
+
+## Step 2: split reference dataset into train and test dataset
+
+```{r fetchSequences2}
+alldataset <- splitTrainTest(reference_meta,reference_expr,
+  groupBy="cellType",sampleID="cell",splitParameter="ratio")
+```
+
+## Step 3: normalize the expression data set
+
+```{r fetchSequences3}
+trainNorExp <- normalizeSCExp(alldataset$trainExplanatoryData,dThresh = 0.25)
+testNorExp <- normalizeSCExp(alldataset$testExplanatoryData,dThresh = 0.25)
+```
+
+## Step 4: filter gene
+
+```{r fetchSequences4}
+filterGene <- filterSCGene(trainNorExp,mu = 2,alpha1 = 0.1,alpha2 = 0.01,threshold=0.25)
+```
+
+## Step 5: find feature gene, this step will takes a long time. for example, it will take 30+ mins for datasize 14550samples X 14954genes
+
+```{r fetchSequences5}
+responseData <- alldataset$trainResponseData$cellType
+uniqueFeatureGene <- findFeatureGene(responseData,trainNorExp,filteredGene=filterGene,topX = 20,reverse=TRUE)
+```
+
+## Step 6: build SVM classifier
+
+```{r fetchSequences6}
+x=t(as.matrix(trainNorExp[uniqueFeatureGene,]))
+y=as.factor(alldataset$trainResponseData$cellType)
+classifier <- buildSVMclassifier(x,y)
+```
+
+## Step 7: Assess the svm classifier with heldout data
+
+```{r fetchSequences7}
+testNorExp <- normalizeSCExp(alldataset$testExplanatoryData,dThresh = 0.25)
+## Note that the order of colnames of testX should be the same as one of training dataset x
+testX=t(as.matrix(testNorExp[uniqueFeatureGene,]))
+yPred <- predictWithclassifier(classifier,testX)
+```
+
+## Step 8: evaluate svm classifier with holdout data
+
+```{r fetchSequences8}
+testY <- as.factor(alldataset$testResponseData$cellType)
+names(testY) <- alldataset$testResponseData$cell
+evaluatedResult <- evaluateClassifier(yPred,testY)
+```
+
+## Step 9: make roc plot
+
+```{r fetchSequences9}
+plotROC(evaluatedResult)
+```
+
+## Step 10: heat map
+```{r fetchSequences10}
+plotHeatmap(yPred,testY)
+```
+
+## Step 11: attribution plot
+```{r fetchSequences11}
+plotAttr(yPred,testY)
+```
+
+# steps for making an R package
+```{r eval=FALSE}
+setwd("path-to-/cellAnnotator/")
+##------
+##git
+##------
+use_git()
+
+##------
+##add import to description
+##------
+use_package("e1071")
+use_package("MLmetrics")
+use_package("caret")
+use_package("caTools")
+use_package("ggplot2")
+use_package("RColorBrewer")
+use_package("pheatmap")
+use_package("pROC")
+use_package("hrbrthemes")
+use_package("scales")
+use_package("Matrix")
+
+##------
+##add lecense to  to description
+##------
+use_mit_license()
+
+##------
+##convert all R with roxygen2 format to Rd file in man folder
+##------
+document()
+
+##------
+##check if there are some warnings
+##------
+warnings()
+
+##------
+##build and check R package
+##------
+devtools::load_all()
+devtools::build()
+devtools::check()
+devtools::install()
+```
+
+
+
+# Session Info
+```{r sessionInfo, echo=TRUE}
+sessionInfo()
+```
+
