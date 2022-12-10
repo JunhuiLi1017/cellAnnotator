@@ -1,0 +1,31 @@
+Package: cellAnnotator
+Title: Cell Type Annotation
+Version: 0.99.0
+Authors@R: 
+    c(person("Junhui", "Li", , "junhui.li11@umassmed.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0003-3973-1700")),
+    person(given = "Julie",
+           family = "Zhu",
+           role = c("aut", "ctb"),
+           email="Julie.Zhu@umassmed.edu"))
+Description: Cell type annotation are performed with known cell type single cell RNA sequence dataset using support vector machine method.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Imports: 
+    caret,
+    caTools,
+    e1071,
+    ggplot2,
+    hrbrthemes,
+    Matrix,
+    MLmetrics,
+    pheatmap,
+    pROC,
+    RColorBrewer,
+    scales
+biocViews: Software
+Depends: 
+    R (>= 2.10)
+LazyData: true
