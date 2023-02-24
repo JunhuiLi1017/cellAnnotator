@@ -26,6 +26,7 @@
 #'
 #' @export
 
+
 buildSVMclassifier <- function(x,
                                y,
                                scale = TRUE,
