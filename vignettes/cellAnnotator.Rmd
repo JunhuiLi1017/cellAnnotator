@@ -1,11 +1,11 @@
 ---
-title: "cellAnnotator Vignette"
+title: "cellAnnotator: Cell Type Annotation Using Support Vector Machine"
 author: "Junhui Li"
 date: "`r doc_date()`"
 package: "`r pkg_ver('cellAnnotator')`"
 bibliography: bibliography.bib
 abstract: >
-  annotate cell type with known cell type single cell RNA sequence dataset using support vector machine method.
+  cellAnnotator is an R package that provides tools for annotating cell types in single-cell RNA sequencing data using Support Vector Machine (SVM) classification. This package enables researchers to leverage known cell type reference datasets to accurately classify cells in query datasets.
 vignette: >
   %\VignetteIndexEntry{cellAnnotator Vignette}
   %\VignetteEngine{knitr::rmarkdown}
@@ -13,8 +13,8 @@ vignette: >
 output:
   BiocStyle::html_document
 ---
-  
-```{r echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+
+```{r setup, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
 suppressPackageStartupMessages({
   library(cellAnnotator)
 })
@@ -22,142 +22,163 @@ suppressPackageStartupMessages({
 
 # Introduction
 
-## Step 1: read train and query dataset and library R package
+The `cellAnnotator` package provides a comprehensive workflow for cell type annotation in single-cell RNA sequencing (scRNA-seq) data using Support Vector Machine (SVM) classification. This vignette demonstrates the complete workflow from data preparation to model evaluation and visualization.
 
-```{r fetchSequences1}
+# Workflow Overview
 
+The annotation process consists of the following main steps:
+
+1. Data preparation and loading
+2. Reference dataset splitting
+3. Expression data normalization
+4. Gene filtering
+5. Feature gene selection
+6. SVM classifier building
+7. Model evaluation
+8. Visualization and interpretation
+9. Model saving and loading
+
+# Step-by-Step Guide
+
+## Step 1: Data Preparation
+
+First, we load the necessary reference and query datasets:
+
+```{r data_preparation}
 library(cellAnnotator)
 
-## load reference meta and expression dataset
-data("reference_meta")
-data("reference_expr")
+# Load reference datasets
+data("reference_meta")  # Reference metadata
+data("reference_expr")  # Reference expression data
 
-## load reference meta and expression dataset
-data("query_meta")
-data("query_expr")
+# Load query datasets
+data("query_meta")      # Query metadata
+data("query_expr")      # Query expression data
 
-## find common genes between reference and query expression dataset
-## then extract expression dataset with common genes for next steps
+# Note: The package will automatically find common genes between reference and query datasets
 ```
 
-## Step 2: split reference dataset into train and test dataset
+## Step 2: Reference Dataset Splitting
 
-```{r fetchSequences2}
-alldataset <- splitTrainTest(reference_meta,reference_expr,
-  groupBy="cellType",sampleID="cell",splitParameter="ratio")
+Split the reference dataset into training and testing sets:
+
+```{r dataset_splitting}
+# Split reference data into training and testing sets
+alldataset <- splitTrainTest(
+  reference_meta,
+  reference_expr,
+  groupBy = "cellType",
+  sampleID = "cell",
+  splitParameter = "ratio"
+)
 ```
 
-## Step 3: normalize the expression data set
+## Step 3: Expression Data Normalization
 
-```{r fetchSequences3}
-trainNorExp <- normalizeSCExp(alldataset$trainExplanatoryData,dThresh = 0.25)
-testNorExp <- normalizeSCExp(alldataset$testExplanatoryData,dThresh = 0.25)
+Normalize the expression data to ensure consistent scaling:
+
+```{r normalization}
+# Normalize training data
+trainNorExp <- normalizeSCExp(
+  alldataset$trainExplanatoryData,
+  dThresh = 0.25
+)
+
+# Normalize testing data
+testNorExp <- normalizeSCExp(
+  alldataset$testExplanatoryData,
+  dThresh = 0.25
+)
 ```
 
-## Step 4: filter gene
+## Step 4: Gene Filtering
 
-```{r fetchSequences4}
-filterGene <- filterSCGene(trainNorExp,mu = 2,alpha1 = 0.1,alpha2 = 0.01,threshold=0.25)
+Filter genes based on expression characteristics:
+
+```{r gene_filtering}
+# Filter genes based on expression patterns
+filterGene <- filterSCGene(
+  trainNorExp,
+  mu = 2,
+  alpha1 = 0.1,
+  alpha2 = 0.01,
+  threshold = 0.25
+)
 ```
 
-## Step 5: find feature gene, this step will takes a long time. for example, it will take 30+ mins for datasize 14550samples X 14954genes
+## Step 5: Feature Gene Selection
 
-```{r fetchSequences5}
+Identify the most informative genes for classification:
+
+```{r feature_selection}
+# Select feature genes (this step may take 30+ minutes for large datasets)
 responseData <- alldataset$trainResponseData$cellType
-uniqueFeatureGene <- findFeatureGene(responseData,trainNorExp,filteredGene=filterGene,topX = 20,reverse=TRUE)
+uniqueFeatureGene <- findFeatureGene(
+  responseData,
+  trainNorExp,
+  filteredGene = filterGene,
+  topX = 20,
+  reverse = TRUE
+)
 ```
 
-## Step 6: build SVM classifier
+## Step 6: SVM Classifier Building
 
-```{r fetchSequences6}
-x=t(as.matrix(trainNorExp[uniqueFeatureGene,]))
-y=as.factor(alldataset$trainResponseData$cellType)
-classifier <- buildSVMclassifier(x,y)
+Build the SVM classifier using the selected features:
+
+```{r classifier_building}
+# Prepare training data
+x <- t(as.matrix(trainNorExp[uniqueFeatureGene,]))
+y <- as.factor(alldataset$trainResponseData$cellType)
+
+# Build SVM classifier
+classifier <- buildSVMclassifier(x, y)
 ```
 
-## Step 7: Assess the svm classifier with heldout data
+## Step 7: Model Evaluation
 
-```{r fetchSequences7}
-testNorExp <- normalizeSCExp(alldataset$testExplanatoryData,dThresh = 0.25)
-## Note that the order of colnames of testX should be the same as one of training dataset x
-testX=t(as.matrix(testNorExp[uniqueFeatureGene,]))
-yPred <- predictWithclassifier(classifier,testX)
-```
+Evaluate the classifier using the test dataset:
 
-## Step 8: evaluate svm classifier with holdout data
+```{r model_evaluation}
+# Prepare test data
+testX <- t(as.matrix(testNorExp[uniqueFeatureGene,]))
+yPred <- predictWithclassifier(classifier, testX)
 
-```{r fetchSequences8}
+# Evaluate predictions
 testY <- as.factor(alldataset$testResponseData$cellType)
 names(testY) <- alldataset$testResponseData$cell
-evaluatedResult <- evaluateClassifier(yPred,testY)
+evaluatedResult <- evaluateClassifier(yPred, testY)
 ```
 
-## Step 9: make roc plot
+## Step 8: Visualization
 
-```{r fetchSequences9}
+Generate various visualizations to interpret the results:
+
+```{r visualization}
+# ROC curve
 plotROC(evaluatedResult)
+
+# Heatmap of predictions
+plotHeatmap(yPred, testY)
+
+# Attribution plot
+plotAttr(yPred, testY)
 ```
 
-## Step 10: heat map
-```{r fetchSequences10}
-plotHeatmap(yPred,testY)
+## Step 9: Model Persistence
+
+Save and load the trained classifier:
+
+```{r model_persistence}
+# Save classifier
+saveClassifier(classifier, file = "classifier.rds")
+
+# Load classifier
+classifier <- loadClassifier("classifier.rds")
 ```
 
-## Step 11: attribution plot
-```{r fetchSequences11}
-plotAttr(yPred,testY)
-```
+# Session Information
 
-# steps for making an R package
-```{r eval=FALSE}
-setwd("path-to-/cellAnnotator/")
-##------
-##git
-##------
-use_git()
-
-##------
-##add import to description
-##------
-use_package("e1071")
-use_package("MLmetrics")
-use_package("caret")
-use_package("caTools")
-use_package("ggplot2")
-use_package("RColorBrewer")
-use_package("pheatmap")
-use_package("pROC")
-use_package("hrbrthemes")
-use_package("scales")
-use_package("Matrix")
-
-##------
-##add lecense to  to description
-##------
-use_mit_license()
-
-##------
-##convert all R with roxygen2 format to Rd file in man folder
-##------
-document()
-
-##------
-##check if there are some warnings
-##------
-warnings()
-
-##------
-##build and check R package
-##------
-devtools::load_all()
-devtools::build()
-devtools::check()
-devtools::install()
-```
-
-
-
-# Session Info
 ```{r sessionInfo, echo=TRUE}
 sessionInfo()
 ```
