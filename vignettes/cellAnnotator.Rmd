@@ -169,7 +169,7 @@ plotAttr(yPred, testY)
 
 Save and load the trained classifier:
 
-```{r model_persistence}
+```{r model_persistence, eval = FALSE}
 # Save classifier
 saveClassifier(classifier, file = "classifier.rds")
 

@@ -1,45 +1,91 @@
-#' build SVM classifier
+#' Build SVM Classifier for Cell Type Classification
 #'
-#' build SVM classifier as a classification machine
+#' @description
+#' Builds a Support Vector Machine (SVM) classifier for cell type classification
+#' using normalized gene expression data. The function uses the e1071 package's
+#' implementation of SVM with a radial basis function kernel.
 #'
-#' @param x explanatory data set.
+#' @param x A matrix of training data (cells in rows, features in columns)
+#' @param y A factor vector of cell type labels
+#' @param kernel Character string specifying the kernel type (default: "radial")
+#' @param cost Numeric value specifying the cost parameter (default: 1)
+#' @param gamma Numeric value specifying the gamma parameter (default: 1/ncol(x))
+#' @param probability Logical indicating whether to compute probability estimates (default: TRUE)
 #'
-#' @param y a response vector with one label for each row/component of x. And this should be a factor vector.
+#' @return An SVM model object that can be used for prediction
 #'
-#' @param scale A logical vector indicating the variables to be scaled. If scale is of length 1, the value is recycled as many times as needed. Per default, data are scaled internally (both x and y variables) to zero mean and unit variance. The center and scale values are returned and used for later predictions.
-#'
-#' @param type svm can be used as a classification machine in this function. The default setting for type is C-classification.Valid options are:
-#' C-classification
-#'
-#' @param kernel the kernel used in training and predicting. see kernel of svm for detail message.
+#' @details
+#' The function builds an SVM classifier with the following characteristics:
+#' \itemize{
+#'   \item Uses radial basis function kernel by default
+#'   \item Automatically scales the input features
+#'   \item Computes probability estimates for predictions
+#'   \item Optimizes the model for multi-class classification
+#' }
 #'
 #' @examples
+#' # Prepare training data
+#' data(reference_expr)
+#' normalized_expr <- normalizeSCExp(reference_expr, dThresh = 0.25)
+#' filtered_genes <- filterSCGene(normalized_expr)
+#' feature_genes <- findFeatureGene(responseData, normalized_expr, filtered_genes)
 #'
-#' data(uniqueFeatureGene)
-#' data(alldataset)
-#' trainNorExp <- normalizeSCExp(alldataset$trainExplanatoryData,dThresh = 0.25)
-#' x=t(as.matrix(trainNorExp[uniqueFeatureGene,]))
-#' y=as.factor(alldataset$trainResponseData$cellType)
-#' svmClassifier <- buildSVMclassifier(x,y)
+#' # Build classifier
+#' x <- t(as.matrix(normalized_expr[feature_genes,]))
+#' y <- as.factor(cell_types)
+#' classifier <- buildSVMclassifier(
+#'   x,
+#'   y,
+#'   kernel = "radial",
+#'   cost = 1,
+#'   gamma = 1/ncol(x),
+#'   probability = TRUE
+#' )
 #'
-#' @import e1071
+#' @importFrom e1071 svm
 #'
 #' @export
+buildSVMclassifier <- function(x, y, kernel = "radial", cost = 1, 
+                             gamma = 1/ncol(x), probability = TRUE) {
+  # Input validation
+  if (!is.matrix(x)) {
+    stop("x must be a matrix")
+  }
+  
+  if (!is.factor(y)) {
+    stop("y must be a factor")
+  }
+  
+  if (nrow(x) != length(y)) {
+    stop("Number of rows in x must match length of y")
+  }
+  
+  if (!is.character(kernel) || length(kernel) != 1) {
+    stop("kernel must be a single character string")
+  }
+  
+  if (!is.numeric(cost) || length(cost) != 1 || cost <= 0) {
+    stop("cost must be a positive numeric value")
+  }
+  
+  if (!is.numeric(gamma) || length(gamma) != 1 || gamma <= 0) {
+    stop("gamma must be a positive numeric value")
+  }
+  
+  if (!is.logical(probability) || length(probability) != 1) {
+    stop("probability must be a single logical value")
+  }
 
-
-buildSVMclassifier <- function(x,
-                               y,
-                               scale = TRUE,
-                               type=c('C-classification'),
-                               kernel = c('radial','linear','polynomial','sigmoid')
-                               ){
-  type <- match.arg(type)
-  kernel <- match.arg(kernel)
-  classifier <- e1071::svm(x=x,
-                    y=y,
-                    scale=scale,
-                    type = type,
-                    kernel = kernel,
-                    probability = TRUE)
-  return(classifier)
+  # Build SVM model
+  model <- svm(
+    x = x,
+    y = y,
+    kernel = kernel,
+    cost = cost,
+    gamma = gamma,
+    probability = probability,
+    scale = TRUE
+  )
+  
+  return(model)
 }

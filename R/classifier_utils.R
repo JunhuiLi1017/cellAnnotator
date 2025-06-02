@@ -2,22 +2,39 @@
 #'
 #' @description
 #' Saves a trained SVM classifier along with its associated metadata to an RDS file.
-#' The saved object includes the classifier model, feature genes, and normalization parameters.
+#' The saved object includes:
+#' \itemize{
+#'   \item The SVM classifier model
+#'   \item Feature genes used for classification
+#'   \item Timestamp of when the classifier was saved
+#'   \item Version of cellAnnotator used
+#' }
 #'
 #' @param classifier A trained SVM classifier object
 #' @param file Character string specifying the path where the classifier should be saved
+#' @param feature_genes Optional character vector of feature genes used in the classifier.
+#'   If not provided, will attempt to extract from the classifier object.
 #' @param ... Additional arguments passed to \code{\link[base]{saveRDS}}
 #'
 #' @return Invisibly returns TRUE if successful
 #'
 #' @examples
 #' \dontrun{
-#' # After training a classifier
-#' saveClassifier(classifier, file = "my_classifier.rds")
+#' # After training a classifier with feature genes
+#' uniqueFeatureGene <- findFeatureGene(responseData, trainNorExp, 
+#'                                     filteredGene = filterGene,
+#'                                     topX = 20, reverse = TRUE)
+#' x <- t(as.matrix(trainNorExp[uniqueFeatureGene,]))
+#' y <- as.factor(trainResponseData$cellType)
+#' classifier <- buildSVMclassifier(x, y)
+#' 
+#' # Save the classifier with feature genes
+#' saveClassifier(classifier, file = "my_classifier.rds", 
+#'               feature_genes = uniqueFeatureGene)
 #' }
 #'
 #' @export
-saveClassifier <- function(classifier, file, ...) {
+saveClassifier <- function(classifier, file, feature_genes = NULL, ...) {
   # Input validation
   if (!inherits(classifier, "svm")) {
     stop("The classifier must be an SVM model object")
@@ -30,6 +47,7 @@ saveClassifier <- function(classifier, file, ...) {
   # Create a list containing all necessary components
   save_object <- list(
     model = classifier,
+    feature_genes = feature_genes,
     timestamp = Sys.time(),
     version = packageVersion("cellAnnotator")
   )
@@ -49,16 +67,35 @@ saveClassifier <- function(classifier, file, ...) {
 #' @description
 #' Loads a previously saved SVM classifier and its associated metadata from an RDS file.
 #' The function performs version compatibility checks and returns the loaded classifier.
+#' The loaded object includes:
+#' \itemize{
+#'   \item The SVM classifier model
+#'   \item Feature genes used for classification (if available)
+#'   \item Timestamp of when the classifier was saved
+#'   \item Version of cellAnnotator used
+#' }
 #'
 #' @param file Character string specifying the path to the saved classifier file
 #' @param ... Additional arguments passed to \code{\link[base]{readRDS}}
 #'
-#' @return The loaded classifier object
+#' @return A list containing:
+#' \itemize{
+#'   \item model: The loaded SVM classifier
+#'   \item feature_genes: The feature genes used for classification (if available)
+#'   \item timestamp: When the classifier was saved
+#'   \item version: Version of cellAnnotator used to save the classifier
+#' }
 #'
 #' @examples
 #' \dontrun{
 #' # Load a previously saved classifier
-#' classifier <- loadClassifier("my_classifier.rds")
+#' saved_classifier <- loadClassifier("my_classifier.rds")
+#' 
+#' # Access the classifier model
+#' classifier <- saved_classifier$model
+#' 
+#' # Access the feature genes
+#' feature_genes <- saved_classifier$feature_genes
 #' }
 #'
 #' @export
@@ -77,7 +114,8 @@ loadClassifier <- function(file, ...) {
     loaded_object <- readRDS(file = file, ...)
     
     # Validate the loaded object structure
-    if (!is.list(loaded_object) || !all(c("model", "timestamp", "version") %in% names(loaded_object))) {
+    required_components <- c("model", "timestamp", "version")
+    if (!is.list(loaded_object) || !all(required_components %in% names(loaded_object))) {
       stop("Invalid classifier file format")
     }
     
@@ -103,7 +141,11 @@ loadClassifier <- function(file, ...) {
       saved_version
     ))
     
-    return(loaded_object$model)
+    if (!is.null(loaded_object$feature_genes)) {
+      message(sprintf("Feature genes (%d) were also loaded", length(loaded_object$feature_genes)))
+    }
+    
+    return(loaded_object)
     
   }, error = function(e) {
     stop(sprintf("Failed to load classifier: %s", e$message))

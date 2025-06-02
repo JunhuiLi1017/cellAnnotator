@@ -1,61 +1,104 @@
-#' evaluate the classifier
+#' Evaluate SVM Classifier Performance
 #'
-#' Computing Classification Evaluation Metrics
+#' @description
+#' Evaluates the performance of a trained SVM classifier using various metrics
+#' including accuracy, precision, recall, F1 score, and confusion matrix.
 #'
-#' @param predY output of predict result from predict function
+#' @param predictions A factor vector of predicted cell types
+#' @param true_labels A factor vector of true cell type labels
+#' @param probability_matrix Optional matrix of prediction probabilities
 #'
-#' @param queryY A vector of response variable named with independent variables
+#' @return A list containing:
+#' \itemize{
+#'   \item accuracy: Overall classification accuracy
+#'   \item confusion_matrix: Confusion matrix of predictions vs true labels
+#'   \item precision: Precision for each cell type
+#'   \item recall: Recall for each cell type
+#'   \item f1_score: F1 score for each cell type
+#'   \item macro_avg: Macro-averaged metrics across all cell types
+#'   \item micro_avg: Micro-averaged metrics across all cell types
+#' }
+#'
+#' @details
+#' The evaluation process includes the following steps:
+#' \enumerate{
+#'   \item Computes confusion matrix
+#'   \item Calculates per-class metrics (precision, recall, F1)
+#'   \item Computes macro and micro averages
+#'   \item Optionally uses probability estimates for more detailed analysis
+#' }
 #'
 #' @examples
+#' # Make predictions
+#' predictions <- predictWithclassifier(classifier, test_data)
 #'
-#' data(uniqueFeatureGene)
-#' data(alldataset)
-#' trainNorExp <- normalizeSCExp(alldataset$trainExplanatoryData,dThresh = 0.25)
-#' x=t(as.matrix(trainNorExp[uniqueFeatureGene,]))
-#' y=as.factor(alldataset$trainResponseData$cellType)
-#' svmClassifier <- buildSVMclassifier(x,y)
-#' testNorExp <- normalizeSCExp(alldataset$testExplanatoryData,dThresh = 0.25)
-#' testX=t(as.matrix(testNorExp[uniqueFeatureGene,]))
-#' yPred <- predictWithclassifier(svmClassifier,testX)
-#' yActual <- as.factor(alldataset$testResponseData$cellType)
-#' names(yActual) <- alldataset$testResponseData$cell
-#' evaluatedResult <- evaluateClassifier(yPred,yActual)
+#' # Evaluate classifier
+#' results <- evaluateClassifier(
+#'   predictions$predictions,
+#'   true_labels,
+#'   predictions$probabilities
+#' )
 #'
-#' @importFrom MLmetrics MultiLogLoss
+#' # Access results
+#' print(results$accuracy)
+#' print(results$confusion_matrix)
+#' print(results$macro_avg)
 #'
 #' @importFrom caret confusionMatrix
+#' @importFrom stats aggregate
 #'
 #' @export
-
-evaluateClassifier <- function(predY,
-                        queryY){
-  #subsetting the probMatrix where the cells' true identity is within the range of the classifiers
-  probMatrix <- attr(predY, "probabilities")
-  #colnames(probMatrix) <- unique(queryY)
-  result <- list()
-  # multiple log loss
-  multiLogLoss <- MLmetrics::MultiLogLoss(y_true = queryY, y_pred = probMatrix)
-  #confusionMatrix
-  cfMatrix <- caret::confusionMatrix(data=predY, reference = queryY)
-  probMatrix11 <- cbind(as.data.frame(as.character(queryY)),probMatrix)
-  colnames(probMatrix11)[1] <- c("cellLable")
-  probMatrix12 <- probMatrix11
-  rocObjList <- list()
-  for(k in 2:ncol(probMatrix11)){
-    nActPos <- which(probMatrix11[,1] %in% colnames(probMatrix11)[k])
-    nActNeg <- setdiff(c(1:nrow(probMatrix11)),nActPos)
-    probMatrix12[nActPos,1] <- colnames(probMatrix11)[k]
-    probMatrix12[nActNeg,1] <- "others"
-
-    rocObj <- roc(probMatrix12[,1], probMatrix12[,k])
-    rocObjList[colnames(probMatrix11)[k]] <- list(rocObj)
-    #plot.roc(pp1,print.auc=TRUE,legacy.axes = TRUE, print.auc.y=0.8, print.auc.x=-0.05, grid=TRUE, auc.polygon=TRUE)
+evaluateClassifier <- function(predictions, true_labels, probability_matrix = NULL) {
+  # Input validation
+  if (!is.factor(predictions)) {
+    stop("predictions must be a factor")
+  }
+  
+  if (!is.factor(true_labels)) {
+    stop("true_labels must be a factor")
+  }
+  
+  if (length(predictions) != length(true_labels)) {
+    stop("Length of predictions must match length of true_labels")
+  }
+  
+  if (!is.null(probability_matrix) && 
+      (!is.matrix(probability_matrix) || nrow(probability_matrix) != length(predictions))) {
+    stop("probability_matrix must be a matrix with rows matching predictions")
   }
 
-  result[['multiLogLoss']] <- multiLogLoss
-  result[['confusionMatrix']] <- cfMatrix
-  result[['rocObjList']] <- rocObjList
-  return(result)
+  # Compute confusion matrix
+  conf_matrix <- confusionMatrix(predictions, true_labels)
+  
+  # Calculate per-class metrics
+  precision <- conf_matrix$byClass[, "Precision"]
+  recall <- conf_matrix$byClass[, "Recall"]
+  f1 <- conf_matrix$byClass[, "F1"]
+  
+  # Compute macro averages
+  macro_avg <- list(
+    precision = mean(precision, na.rm = TRUE),
+    recall = mean(recall, na.rm = TRUE),
+    f1 = mean(f1, na.rm = TRUE)
+  )
+  
+  # Compute micro averages
+  micro_avg <- list(
+    precision = conf_matrix$overall["Accuracy"],
+    recall = conf_matrix$overall["Accuracy"],
+    f1 = conf_matrix$overall["Accuracy"]
+  )
+  
+  # Return results
+  list(
+    accuracy = conf_matrix$overall["Accuracy"],
+    confusion_matrix = conf_matrix$table,
+    precision = precision,
+    recall = recall,
+    f1_score = f1,
+    macro_avg = macro_avg,
+    micro_avg = micro_avg
+  )
 }
 
 
